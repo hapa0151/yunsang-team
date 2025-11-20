@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fridge Fusion AI 셰프 - API 직접 호출 버전</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        /* 상세 정보 모달 스타일 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            position: relative;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 font-sans p-4 sm:p-8">
+
+    <div id="app" class="max-w-4xl mx-auto">
+        <header class="text-center mb-10 relative">
+            <h1 class="text-4xl font-extrabold text-indigo-600">🥘 Fridge Fusion AI 셰프</h1>
+            <p class="text-gray-600 mt-2">남은 재료를 입력하면 AI가 맞춤형 레시피를 창조합니다.</p>
+            
+            <div class="absolute top-4 right-0 sm:right-auto sm:left-full sm:ml-4 flex items-center space-x-2">
+                <span id="user-status" class="text-sm text-gray-600 hidden"></span>
+                <button id="auth-button" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150">Google로 로그인</button>
+            </div>
+        </header>
+        
+        <div class="flex justify-center mb-8">
+            <button id="generator-tab" class="px-6 py-3 text-lg font-semibold rounded-t-lg transition duration-200 bg-indigo-600 text-white shadow-lg">레시피 생성</button>
+            <button id="saved-tab" class="px-6 py-3 text-lg font-semibold rounded-t-lg transition duration-200 bg-white text-gray-600 hover:bg-gray-100">저장된 레시피 (<span id="saved-count">0</span>)</button>
+        </div>
+
+        <div id="message-box" class="hidden p-4 mb-6 text-sm text-white bg-red-400 rounded-lg shadow-md transition-opacity duration-300" role="alert"></div>
+        
+        <div id="generator-view">
+            <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">재료 입력 및 조건 설정</h2>
+                <div class="flex flex-col space-y-4">
+                    <div>
+                        <label for="ingredients" class="block text-sm font-medium text-gray-700 mb-1">남은 재료 입력 (콤마나 공백으로 구분)</label>
+                        <input id="ingredients" type="text" placeholder="예: 닭가슴살, 양배추, 토마토소스" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"/>
+                    </div>
+                    
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">난이도 필터</label>
+                            <div id="difficulty-options" class="flex space-x-3 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                                <label class="flex items-center cursor-pointer"><input type="radio" name="difficulty" value="초급" checked class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"><span class="ml-2 text-gray-700 text-sm">초급</span></label>
+                                <label class="flex items-center cursor-pointer"><input type="radio" name="difficulty" value="중급" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"><span class="ml-2 text-gray-700 text-sm">중급</span></label>
+                                <label class="flex items-center cursor-pointer"><input type="radio" name="difficulty" value="고급" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"><span class="ml-2 text-gray-700 text-sm">고급</span></label>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label for="category" class="block text-sm font-medium text-gray-700 mb-1">요리 카테고리</label>
+                            <select id="category" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                                <option value="한식">한식</option><option value="양식">양식</option><option value="일식">일식</option>
+                                <option value="중식">중식</option><option value="퓨전" selected>퓨전</option><option value="다이어트">다이어트</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button id="generate-button" class="w-full py-3 bg-indigo-600 text-white font-extrabold rounded-lg shadow-lg hover:bg-indigo-700 transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed">
+                        ✨ 맞춤 레시피 생성하기
+                    </button>
+                </div>
+            </div>
+
+            <div id="recipe-output-container" class="space-y-8 hidden"></div>
+            
+            <div id="initial-message" class="p-8 text-center text-gray-500 bg-white rounded-xl shadow-md">
+                <p>재료를 입력하고 맞춤형 레시피를 생성해 보세요!</p>
+            </div>
+        </div>
+
+        <div id="saved-view" class="hidden space-y-4">
+             <h2 class="text-2xl font-bold text-gray-800 border-b pb-2">💾 저장된 레시피 목록 (<span id="saved-list-count">0</span>개)</h2>
+             <div id="saved-recipes-list" class="space-y-6"></div>
+             <p class="text-xs text-gray-400 mt-4">사용자 ID: <span id="user-id-display">인증 중...</span></p>
+        </div>
+    </div>
+    
+    <div id="details-modal" class="modal hidden">
+        <div id="modal-content" class="modal-content">
+            </div>
+    </div>
+
+    <script type="module">
+        // Firebase SDK 로드
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+        import { getFirestore, collection, addDoc, onSnapshot, query, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+        // 🚨🚨🚨 당신의 실제 키 및 설정을 여기에 정확히 넣어주세요! 🚨🚨🚨
+        const API_KEY = "AIzaSyATVI-N7RDgANNek521f3VJLB6xzX5kYbI"; // 👈 Gemini API 키
+        const FIREBASE_CONFIG = { // 👈 Firebase 설정
+            apiKey: "AIzaSyBcg7Q3ln57jINGlSLKC5EmQQQxAkSPzeQ",
+            authDomain: "food-121d1.firebaseapp.com",
+            projectId: "food-121d1",
+            storageBucket: "food-121d1.firebasestorage.app",
+            messagingSenderId: "156738635517",
+            appId: "1:156738635517:web:64dc618a7b22e6bad66094",
+            measurementId: "G-S1Q441PKL0"   
+        };    
+        const PLACEHOLDER_KEY = "AIzaSy...당신의 실제키...xyz"; 
+        
+        // 🚨🚨🚨 Cloud Function 제거, API URL 직접 사용으로 복구 🚨🚨🚨
+        const GEMINI_MODEL = 'gemini-2.5-flash'; 
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${API_KEY}`;
+        const IMAGEN_MODEL = 'imagen-3.0-generate-002';
+        const IMAGEN_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGEN_MODEL}:predict?key=${API_KEY}`;
+        
+        let db = null; 
+        let auth;
+        let userId = null; 
+        let currentRecipe = null; 
+        let currentRecipeImage = null; 
+        let currentSources = []; 
+        let chatHistory = []; 
+        let isLoading = false;
+        
+        const GoogleProvider = new GoogleAuthProvider(); 
+
+        // RECIPE_SCHEMA
+        const RECIPE_SCHEMA = {
+            type: "OBJECT", properties: {title: { type: "STRING"}, difficulty: { type: "STRING"}, time: { type: "STRING"}, tasteProfile: { type: "STRING"}, description: { type: "STRING"}, ingredients: { type: "ARRAY", items: { type: "OBJECT", properties: {name: { type: "STRING" }, quantity: { type: "STRING" }}}}, instructions: { type: "ARRAY", items: { type: "STRING" } }}, required: ["title", "difficulty", "time", "tasteProfile", "description", "ingredients", "instructions"]
+        };
+        
+        // --- UI Elements ---
+        const $ingredients = document.getElementById('ingredients');
+        const $category = document.getElementById('category');
+        const $generateButton = document.getElementById('generate-button');
+        const $messageBox = document.getElementById('message-box');
+        const $recipeOutputContainer = document.getElementById('recipe-output-container');
+        const $initialMessage = document.getElementById('initial-message');
+        const $generatorView = document.getElementById('generator-view');
+        const $savedView = document.getElementById('saved-view');
+        const $savedCount = document.getElementById('saved-count');
+        const $savedListCount = document.getElementById('saved-list-count');
+        const $userIdDisplay = document.getElementById('user-id-display');
+        const $generatorTab = document.getElementById('generator-tab');
+        const $savedTab = document.getElementById('saved-tab');
+        const $detailsModal = document.getElementById('details-modal');
+        const $modalContent = document.getElementById('modal-content');
+        const $authButton = document.getElementById('auth-button'); 
+        const $userStatus = document.getElementById('user-status'); 
+        let savedRecipes = [];
+
+        // --- Utility Functions ---
+        function showMessage(msg, isError = true) { /* ... */ 
+            $messageBox.textContent = msg;
+            $messageBox.classList.remove('hidden', 'bg-red-400', 'bg-green-400');
+            $messageBox.classList.add(isError ? 'bg-red-400' : 'bg-green-400');
+            setTimeout(() => { $messageBox.classList.add('hidden'); }, 5000);
+        }
+
+        function setLoading(loading, message = 'AI 셰프가 레시피를 만드는 중...') { /* ... */ 
+            isLoading = loading;
+            $generateButton.disabled = loading;
+            $generateButton.textContent = loading ? message : '✨ 맞춤 레시피 생성하기';
+            
+            const refineInput = document.querySelector('#refine-form input[name="chatInput"]');
+            const refineButton = document.querySelector('#refine-form button[type="submit"]');
+
+            if(refineInput) refineInput.disabled = loading || !currentRecipe;
+            if(refineButton) refineButton.disabled = loading || !currentRecipe;
+            if(refineInput && loading) refineInput.placeholder = 'AI가 작업 중입니다...';
+            if(refineInput && !loading && currentRecipe) refineInput.placeholder = '수정 요청을 입력하세요...';
+            if(refineButton) refineButton.textContent = loading ? '수정 중...' : '수정 요청';
+        }
+        
+        function getDifficulty() {
+            return document.querySelector('input[name="difficulty"]:checked').value;
+        }
+
+        // --- Firebase Initialization and Auth ---
+        async function initializeFirebaseAndAuth() {
+            try {
+                if (FIREBASE_CONFIG.projectId) { 
+                    const app = initializeApp(FIREBASE_CONFIG);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                } else { throw new Error("Firebase CONFIG is missing or invalid. Storage feature disabled."); }
+                
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        $authButton.textContent = '로그아웃';
+                        $userStatus.textContent = `${user.displayName || user.email}님`;
+                        $userStatus.classList.remove('hidden');
+                        setupFirestoreListener(); 
+                    } else {
+                        userId = null;
+                        $authButton.textContent = 'Google로 로그인';
+                        $userStatus.textContent = '';
+                        $userStatus.classList.add('hidden');
+                        setupFirestoreListener(); 
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                userId = null;
+                $userIdDisplay.textContent = '저장 비활성화 (설정 오류)';
+                showMessage("Firebase 설정이 잘못되어 레시피 저장 기능을 사용할 수 없습니다. 콘솔 확인 요망.", true);
+            }
+        }
+        
+        // --- Auth Handlers ---
+        async function handleAuth() {
+            if (userId) {
+                try {
+                    await signOut(auth);
+                    showMessage("로그아웃 되었습니다. 저장된 레시피를 보려면 다시 로그인하세요.", false);
+                } catch (error) {
+                    console.error("Logout failed:", error);
+                    showMessage("로그아웃에 실패했습니다.", true);
+                }
+            } else {
+                try {
+                    await signInWithPopup(auth, GoogleProvider);
+                } catch (error) {
+                    console.error("Google login failed:", error);
+                    showMessage(`로그인 실패: ${error.code}`, true);
+                }
+            }
+        }
+
+        // --- Firestore Listener ---
+        function setupFirestoreListener() {
+             if (!userId) {
+                 savedRecipes = [];
+                 $savedCount.textContent = 0;
+                 $savedListCount.textContent = 0;
+                 if (!$generatorView.classList.contains('hidden')) { renderSavedRecipes(); }
+                 return;
+             }
+            
+             const recipeCollectionPath = `artifacts/${FIREBASE_CONFIG.appId || 'default'}/users/${userId}/savedRecipes`;
+             const q = query(collection(db, recipeCollectionPath));
+             onSnapshot(q, (snapshot) => {
+                 savedRecipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                 $savedCount.textContent = savedRecipes.length;
+                 $savedListCount.textContent = savedRecipes.length;
+                 if (!$generatorView.classList.contains('hidden')) { renderSavedRecipes(); }
+             }, (error) => { console.error("Error fetching saved recipes:", error); });
+        }
+        
+        // --- Image Generation Function ---
+        async function generateRecipeImage(prompt) { 
+            currentRecipeImage = null;
+            if (API_KEY.length < 30) return;
+
+            try {
+                // ... (Imagen API 호출 로직 생략) ...
+                return "https://via.placeholder.com/300?text=Recipe+Image+Placeholder";
+            } catch (error) {
+                console.error('Error generating image:', error);
+            }
+        }
+
+        // --- Core Function: Combined Generation (API 직접 호출) ---
+        async function startGeneration(currentIngredients, currentDifficulty, currentCategory, chatMessage = null) {
+            if (isLoading) return;
+            
+            // 🚨 API 키 유효성 검사 (로그인 없이 생성 허용)
+            if (API_KEY.length < 30) { 
+                showMessage("🚨 API 키가 유효하지 않습니다. 키 값을 확인해주세요.", true);
+                return; 
+            }
+            
+            const isRefining = !!chatMessage;
+            if (!isRefining) { 
+                currentRecipe = null; currentRecipeImage = null; currentSources = []; chatHistory = []; 
+            }
+
+            setLoading(true, isRefining ? 'AI 셰프가 레시피를 수정하고 있습니다...' : 'AI 셰프가 당신을 위한 레시피와 이미지를 만들고 있습니다...');
+
+            const basePrompt = `다음 재료 '${currentIngredients}'를 **오직 사용하여** 난이도 '${currentDifficulty}'에 맞고, '${currentCategory}' 카테고리 내에서 조리 시간 10분에서 20분 이내의 레시피를 생성해 주세요. 모든 응답은 요청된 JSON 스키마를 따라야 하며, 응답 언어는 한국어로 작성해 주세요.`;
+            const userPromptPart = { text: chatMessage || basePrompt };
+            const contentsToSend = isRefining ? [...chatHistory, { role: "user", parts: [userPromptPart] }] : [{ role: "user", parts: [userPromptPart] }];
+
+            try {
+                const payload = {
+                    contents: contentsToSend,
+                    generationConfig: { 
+                        responseMimeType: "application/json", 
+                        responseSchema: RECIPE_SCHEMA 
+                    },
+                    systemInstruction: { parts: [{ text: "당신은 세계적인 셰프 AI입니다. 오직 사용자가 제공한 재료만 사용하여 정확히 JSON 형식에 맞춰 레시피를 생성해야 합니다." }] },
+                };
+                
+                // 🚨🚨🚨 API 직접 호출 🚨🚨🚨
+                const response = await fetch(GEMINI_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Gemini API Error Response:", errorText);
+                    throw new Error(`Gemini API 호출 실패: ${response.status}. 콘솔의 상세 오류를 확인하세요.`);
+                }
+
+                const result = await response.json();
+                const candidate = result.candidates?.[0]; 
+                const jsonText = candidate?.content?.parts?.[0]?.text;
+                
+                if (!jsonText || jsonText.trim().length === 0) {
+                     throw new Error('API가 응답했으나 레시피 데이터(JSON)가 비어 있습니다.');
+                }
+
+                let parsedRecipe;
+                try {
+                    parsedRecipe = JSON.parse(jsonText);
+                } catch (e) {
+                    throw new Error('API 응답이 JSON 형식이 아닙니다.');
+                }
+
+                currentRecipe = parsedRecipe;
+                currentRecipeImage = await generateRecipeImage(currentRecipe.title); 
+                
+                renderRecipe();
+                showMessage("🎉 레시피가 성공적으로 생성되었습니다!", false);
+
+            } catch (error) {
+                console.error('Error in generation process:', error);
+                showMessage(`레시피 생성 중 오류 발생: ${error.message}.`, true);
+            } finally {
+                setLoading(false);
+            }
+        }
+        
+        // --- Firestore CRUD Functions ---
+        async function saveCurrentRecipe() { 
+            if (!currentRecipe) { 
+                showMessage("저장할 레시피가 없습니다. 먼저 레시피를 생성해 주세요.", true); 
+                return; 
+            }
+            
+            // 🚨🚨🚨 로그인 상태가 아니면 즉시 로그인 팝업을 띄웁니다. 🚨🚨🚨
+            if (!userId) { 
+                showMessage("🚨 저장 기능을 사용하려면 Google 로그인이 필요합니다. 로그인 창이 나타납니다.", true); 
+                await handleAuth();
+                return;
+            }
+            
+            if (!db) { showMessage("🚨 데이터베이스 초기화 오류로 저장할 수 없습니다.", true); return; }
+            
+            try {
+                const recipeToSave = { ...currentRecipe, createdAt: new Date().toISOString(), userId: userId, ingredientsInput: $ingredients.value, category: $category.value, recipeImage: currentRecipeImage || null, sources: currentSources };
+                const recipeCollectionPath = `artifacts/${FIREBASE_CONFIG.appId || 'default'}/users/${userId}/savedRecipes`;
+                await addDoc(collection(db, recipeCollectionPath), recipeToSave);
+                showMessage(`레시피 '${currentRecipe.title}'가 성공적으로 저장되었습니다!`, false);
+            } catch (error) { 
+                console.error("Error saving recipe:", error); 
+                showMessage("레시피 저장에 실패했습니다. Firestore 규칙이나 콘솔 오류를 확인하세요.", true); 
+            }
+        }
+
+        async function deleteSavedRecipe(recipeId, title) {
+            if (!userId || !db) return;
+            try {
+                const docRef = doc(db, `artifacts/${FIREBASE_CONFIG.appId || 'default'}/users/${userId}/savedRecipes`, recipeId);
+                await deleteDoc(docRef);
+                renderSavedRecipes(); 
+                showMessage(`레시피 '${title}'이(가) 삭제되었습니다.`, false);
+            } catch (error) {
+                console.error("Error deleting recipe:", error);
+                showMessage("레시피 삭제에 실패했습니다.", true);
+            }
+        }
+        
+        // --- Saved Recipe Details Viewer ---
+        function viewSavedRecipeDetails(recipeId) { /* ... */ }
+
+        // --- Rendering Functions ---
+        function renderRecipe() { 
+             if (!currentRecipe) { $recipeOutputContainer.innerHTML = ''; return; }
+             
+             const recipe = currentRecipe;
+             const tasteKeywords = recipe.tasteProfile ? recipe.tasteProfile.split(',').map(s => s.trim()) : [];
+             
+             let ingredientsList = recipe.ingredients.map(i => `<li class="flex items-start"><span class="text-indigo-600 mr-2">•</span>${i.name} (${i.quantity})</li>`).join('');
+             let instructionsList = recipe.instructions.map((i, idx) => `<li class="mb-3"><span class="font-bold text-indigo-600">${idx + 1}.</span> ${i}</li>`).join('');
+
+
+             const recipeCardHTML = `
+                <div class="recipe-card bg-white p-6 rounded-xl shadow-lg border border-gray-100 mb-6 transition-all duration-300">
+                    <h2 class="text-3xl font-extrabold text-indigo-700 border-b pb-2 mb-4">${recipe.title || '제목 없음'}</h2>
+                    
+                    <div class="text-sm mb-4 p-3 bg-indigo-50 rounded-lg">
+                        <div class="flex justify-between items-center pb-2 border-b border-indigo-200 mb-2">
+                            <span class="font-semibold text-gray-700">⏰ 조리 시간: ${recipe.time}</span>
+                            <span class="font-semibold text-gray-700">⭐ 난이도: ${recipe.difficulty}</span>
+                        </div>
+                        
+                        <div class="flex flex-wrap items-center pt-2">
+                            <span class="font-bold text-gray-700 mr-2">😋 예상 맛:</span>
+                            ${tasteKeywords.map(tag => `<span class="bg-yellow-200 text-yellow-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full shadow-sm">${tag}</span>`).join('')}
+                        </div>
+
+                        <button id="save-recipe-button" class="mt-3 flex items-center text-sm font-medium text-white bg-green-500 hover:bg-green-600 transition px-3 py-1 rounded-full shadow-md w-full justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3-7 3V5z" /></svg>
+                            레시피 저장
+                        </button>
+                    </div>
+                    
+                    <p class="text-gray-600 italic mb-6 border-l-4 border-indigo-400 pl-3">"${recipe.description}"</p>
+
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800 mb-3 flex items-center"><span class="text-indigo-500 mr-2">🍴</span> 필수 재료</h3>
+                            <ul class="list-none space-y-2 text-gray-700 pl-2">
+                                ${ingredientsList}
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800 mb-3 flex items-center"><span class="text-green-500 mr-2">✨</span> 입력 재료</h3>
+                            <p class="text-sm text-gray-600 mb-2">(이 레시피 생성 시 사용한 재료)</p>
+                            <ul class="list-none space-y-2 text-gray-700 pl-2">
+                                <li class="hover:bg-green-50 p-1 rounded transition">${$ingredients.value || 'N/A'}</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mt-8">
+                        <h3 class="text-xl font-bold text-gray-800 mb-3 flex items-center"><span class="text-red-500 mr-2">🔥</span> 조리 순서</h3>
+                        <ol class="list-decimal pl-5 space-y-3 text-gray-700">
+                            ${instructionsList}
+                        </ol>
+                    </div>
+                </div>
+            `;
+            const refinementChatHTML = `
+                <div id="refinement-chat-container" class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                    <form id="refine-form" class="flex space-x-3">
+                        <input name="chatInput" type="text" placeholder="${isLoading ? 'AI가 작업 중입니다...' : '수정 요청을 입력하세요...'}" disabled="${isLoading ? 'true' : ''}" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-50"/>
+                        <button type="submit" disabled="${isLoading ? 'true' : ''}" class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 disabled:opacity-50">${isLoading ? '수정 중...' : '수정 요청'}</button>
+                    </form>
+                </div>
+            `;
+            $recipeOutputContainer.innerHTML = recipeCardHTML + refinementChatHTML;
+            document.getElementById('save-recipe-button').addEventListener('click', saveCurrentRecipe);
+            document.getElementById('refine-form').addEventListener('submit', handleRefine);
+            $recipeOutputContainer.classList.remove('hidden');
+            $initialMessage.classList.add('hidden');
+        }
+        
+        function renderSavedRecipes() { /* ... */ }
+
+
+        // --- Event Handlers ---
+        function handleGenerateClick() {
+            if (isLoading) return;
+            const ingredients = $ingredients.value.trim();
+            if (!ingredients) { showMessage("재료를 입력해 주세요."); return; }
+            chatHistory = []; 
+            startGeneration(ingredients, getDifficulty(), $category.value);
+        }
+
+        function handleRefine(e) { /* ... */ }
+        
+        function handleTabClick(mode) { /* ... */ }
+
+        // --- Initial Setup ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeFirebaseAndAuth(); 
+            document.getElementById('generator-tab').addEventListener('click', () => handleTabClick('generator'));
+            document.getElementById('saved-tab').addEventListener('click', () => handleTabClick('saved'));
+            $generateButton.addEventListener('click', handleGenerateClick);
+            $authButton.addEventListener('click', handleAuth);
+            
+            handleTabClick('generator');
+        });
+
+    </script>
+</body>
+</html>

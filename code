@@ -133,9 +133,9 @@
         import { getFirestore, collection, addDoc, onSnapshot, query, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
         //키 및 설정
-        const API_KEY = "AIzaSyATVI-N7RDgANNek521f3VJLB6xzX5kYbI"; // Gemini API 키
+        const API_KEY = ""; // Gemini API 키
         const FIREBASE_CONFIG = { // Firebase 설정
-            apiKey: "AIzaSyBcg7Q3ln57jINGlSLKC5EmQQQxAkSPzeQ",
+            apiKey: "",
             authDomain: "food-121d1.firebaseapp.com",
             projectId: "food-121d1",
             storageBucket: "food-121d1.firebasestorage.app",

@@ -1,4 +1,4 @@
-[AI_Recipe_Mate_Final_Plan (1).md](https://github.com/user-attachments/files/23515141/AI_Recipe_Mate_Final_Plan.1.md)
+[AI_Recipe_Mate_Final_Plan.md](https://github.com/user-attachments/files/23515141/AI_Recipe_Mate_Final_Plan.1.md)
 # AI 레시피 메이트 최종 기획안 (PRD 및 상세 명세)
 
 ## 1. 프로젝트 요구사항 정의서 (PRD 요약)
